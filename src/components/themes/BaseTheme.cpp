@@ -575,6 +575,71 @@ void BaseTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
   }
 }
 
+void BaseTheme::drawBookCoverGrid(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& books,
+                                  int selectedIndex, int coverHeight, int columns, bool coversAlreadyRendered) const {
+  if (books.empty()) {
+    renderer.drawText(UI_10_FONT_ID, rect.x + BaseMetrics::values.contentSidePadding, rect.y + 20, "No books found");
+    return;
+  }
+
+  const int sidePadding = BaseMetrics::values.contentSidePadding;
+  const int cellWidth = (rect.width - 2 * sidePadding) / columns;
+  const int thumbWidth = coverHeight * 6 / 10;
+  const int titleHeight = renderer.getLineHeight(UI_10_FONT_ID) + 5;
+  constexpr int cellGap = 10;
+  const int cellHeight = coverHeight + titleHeight + cellGap;
+
+  for (int i = 0; i < static_cast<int>(books.size()); i++) {
+    const int col = i % columns;
+    const int row = i / columns;
+    const int cellX = rect.x + sidePadding + col * cellWidth;
+    const int cellY = rect.y + row * cellHeight;
+    const int coverX = cellX + (cellWidth - thumbWidth) / 2;
+    const int coverY = cellY;
+    const bool isSelected = (i == selectedIndex);
+
+    // Selection highlight
+    if (isSelected) {
+      renderer.fillRect(cellX + 2, cellY - 2, cellWidth - 4, cellHeight - cellGap + 4);
+    }
+
+    // Cover image or placeholder
+    if (!coversAlreadyRendered) {
+      bool coverDrawn = false;
+      if (!books[i].coverBmpPath.empty()) {
+        const std::string thumbPath = UITheme::getCoverThumbPath(books[i].coverBmpPath, coverHeight);
+        FsFile file;
+        if (Storage.openFileForRead("LIB", thumbPath, file)) {
+          Bitmap bitmap(file);
+          if (bitmap.parseHeaders() == BmpReaderError::Ok && bitmap.getWidth() > 0 && bitmap.getHeight() > 0) {
+            renderer.drawBitmap(bitmap, coverX, coverY, thumbWidth, coverHeight);
+            coverDrawn = true;
+          }
+          file.close();
+        }
+      }
+
+      if (!coverDrawn) {
+        // Blank white placeholder with border
+        if (isSelected) {
+          renderer.fillRect(coverX, coverY, thumbWidth, coverHeight, false);
+        }
+        renderer.drawRect(coverX, coverY, thumbWidth, coverHeight, !isSelected);
+      }
+    }
+
+    // Selection border on top of cover (drawn in both fresh and restored paths)
+    if (isSelected) {
+      renderer.drawRect(cellX + 2, cellY - 2, cellWidth - 4, cellHeight - cellGap + 4, false);
+    }
+
+    // Title text below cover
+    const int titleY = coverY + coverHeight + 5;
+    auto title = renderer.truncatedText(UI_10_FONT_ID, books[i].title.c_str(), cellWidth - 8);
+    renderer.drawText(UI_10_FONT_ID, cellX + 4, titleY, title.c_str(), !isSelected);
+  }
+}
+
 void BaseTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount, int selectedIndex,
                                const std::function<std::string(int index)>& buttonLabel,
                                const std::function<std::string(int index)>& rowIcon) const {

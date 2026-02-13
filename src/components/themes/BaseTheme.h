@@ -109,6 +109,9 @@ class BaseTheme {
   virtual void drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
                                    const int selectorIndex, bool& coverRendered, bool& coverBufferStored,
                                    bool& bufferRestored, std::function<bool()> storeCoverBuffer) const;
+  virtual void drawBookCoverGrid(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& books,
+                                 int selectedIndex, int coverHeight, int columns,
+                                 bool coversAlreadyRendered = false) const;
   virtual void drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount, int selectedIndex,
                               const std::function<std::string(int index)>& buttonLabel,
                               const std::function<std::string(int index)>& rowIcon) const;
