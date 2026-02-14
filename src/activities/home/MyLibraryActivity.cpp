@@ -97,20 +97,17 @@ int MyLibraryActivity::getItemsPerPage() const {
 }
 
 int MyLibraryActivity::getPageForIndex(int index) const {
-  const int ipp = getItemsPerPage();
-  return ipp > 0 ? index / ipp : 0;
+  return cachedItemsPerPage > 0 ? index / cachedItemsPerPage : 0;
 }
 
 void MyLibraryActivity::startPageLoad(int page) {
   currentPage = page;
   pageCoversLoaded = false;
-  const int ipp = getItemsPerPage();
-  pageLoadIndex = page * ipp;
+  pageLoadIndex = page * cachedItemsPerPage;
 }
 
 void MyLibraryActivity::loadNextPageCover() {
-  const int ipp = getItemsPerPage();
-  const int pageEnd = std::min((currentPage + 1) * ipp, static_cast<int>(gridEntries.size()));
+  const int pageEnd = std::min((currentPage + 1) * cachedItemsPerPage, static_cast<int>(gridEntries.size()));
 
   // Skip already-loaded items (from previous visits to this page)
   while (static_cast<int>(pageLoadIndex) < pageEnd && gridEntries[pageLoadIndex].loaded) {
@@ -222,6 +219,7 @@ void MyLibraryActivity::loadFiles() {
   isGridMode = isLeafDirectory();
   if (isGridMode) {
     gridEntries.resize(files.size());
+    cachedItemsPerPage = getItemsPerPage();
   }
 }
 
@@ -314,7 +312,7 @@ void MyLibraryActivity::loop() {
 
   if (isGridMode) {
     // Grid mode: 4-directional navigation using ButtonNavigator
-    const int ipp = getItemsPerPage();
+    const int ipp = cachedItemsPerPage;
 
     // Left/Right: move by single item
     buttonNavigator.onRelease({MappedInputManager::Button::Left}, [this, listSize] {
@@ -406,8 +404,8 @@ void MyLibraryActivity::renderList() const {
   const auto pageHeight = renderer.getScreenHeight();
   auto metrics = UITheme::getInstance().getMetrics();
 
-  auto folderName = basepath == "/" ? "SD card" : basepath.substr(basepath.rfind('/') + 1).c_str();
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, folderName);
+  const std::string folderName = basepath == "/" ? "SD card" : basepath.substr(basepath.rfind('/') + 1);
+  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, folderName.c_str());
 
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
@@ -431,7 +429,7 @@ void MyLibraryActivity::renderGrid() {
   const auto pageHeight = renderer.getScreenHeight();
   auto metrics = UITheme::getInstance().getMetrics();
 
-  const int ipp = getItemsPerPage();
+  const int ipp = cachedItemsPerPage;
   const int viewPage = getPageForIndex(selectorIndex);
 
   // If page changed, start loading the new page's covers
@@ -449,8 +447,8 @@ void MyLibraryActivity::renderGrid() {
   if (!bufferRestored) {
     renderer.clearScreen();
 
-    auto folderName = basepath == "/" ? "SD card" : basepath.substr(basepath.rfind('/') + 1).c_str();
-    GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, folderName);
+    const std::string folderName = basepath == "/" ? "SD card" : basepath.substr(basepath.rfind('/') + 1);
+    GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, folderName.c_str());
   }
 
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
@@ -465,16 +463,16 @@ void MyLibraryActivity::renderGrid() {
   }
 
   GUI.drawBookCoverGrid(renderer, Rect{0, contentTop, pageWidth, contentHeight}, pageItems, localSelected,
-                        GRID_THUMB_HEIGHT, GRID_COLS, bufferRestored);
-
-  // Cache the buffer once all covers on this page are loaded
-  if (!bufferRestored && pageCoversLoaded) {
-    coverBufferStored = storeCoverBuffer();
-    cachedPage = viewPage;
-  }
+                        GRID_THUMB_HEIGHT, GRID_COLS, GRID_CELL_GAP, bufferRestored,
+                        pageCoversLoaded ? [this, viewPage]() -> bool {
+                          cachedPage = viewPage;
+                          coverBufferStored = storeCoverBuffer();
+                          return coverBufferStored;
+                        }
+                                        : std::function<bool()>(nullptr));
 
   // Page indicator
-  const int totalPages = (static_cast<int>(gridEntries.size()) + ipp - 1) / ipp;
+  const int totalPages = ipp > 0 ? (static_cast<int>(gridEntries.size()) + ipp - 1) / ipp : 1;
   if (totalPages > 1) {
     std::string pageText = std::to_string(viewPage + 1) + " / " + std::to_string(totalPages);
     const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, pageText.c_str());
@@ -483,7 +481,7 @@ void MyLibraryActivity::renderGrid() {
   }
 
   // Help text
-  const auto labels = mappedInput.mapLabels("« Home", "Open", "Up", "Down");
+  const auto labels = mappedInput.mapLabels(basepath == "/" ? "« Home" : "« Back", "Open", "Up", "Down");
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer();

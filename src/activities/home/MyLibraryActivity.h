@@ -39,6 +39,7 @@ class MyLibraryActivity final : public Activity {
   int currentPage = -1;
   bool pageCoversLoaded = false;
   size_t pageLoadIndex = 0;
+  int cachedItemsPerPage = 0;
 
   // Frame buffer cache (same pattern as HomeActivity)
   uint8_t* coverBuffer = nullptr;
